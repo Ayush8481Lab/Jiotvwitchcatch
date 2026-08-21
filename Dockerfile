@@ -1,29 +1,30 @@
-# Use the official PHP 8.2 Apache image (Use php:7.4-apache if you face compatibility issues)
+# Use the official PHP 8.2 image with Apache
 FROM php:8.2-apache
 
-# Enable Apache mod_rewrite for routing
-RUN a2enmod rewrite
-
-# Install required system dependencies and PHP extensions (cURL is heavily used by TS-JioTV)
+# Install required system packages and the PHP cURL extension (vital for JioTV API calls)
 RUN apt-get update && apt-get install -y \
     libcurl4-openssl-dev \
-    libonig-dev \
-    libxml2-dev \
-    && docker-php-ext-install curl mbstring xml \
+    && docker-php-ext-install curl \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy the TS-JioTV source code into the Apache document root
+# Enable Apache mod_rewrite (for clean URLs if needed)
+RUN a2enmod rewrite
+
+# Copy all the JioTV project files into the Apache web root
 COPY . /var/www/html/
 
-# Set proper ownership and permissions so the script can save tokens/cache
-RUN chown -R www-data:www-data /var/www/html \
-    && chmod -R 755 /var/www/html
+# Create the cache directory explicitly to prevent PHP mkdir() permission errors
+RUN mkdir -p /var/www/html/app/data/cache/jitendraunatti
 
-# Render assigns a dynamic port via the $PORT environment variable.
-# We must update Apache configuration to listen on this port instead of default 80.
+# Set read/write permissions so the PHP script can save OTP tokens and cookies securely
+RUN chown -R www-data:www-data /var/www/html \
+    && chmod -R 777 /var/www/html/app/data/cache
+
+# Render dynamically assigns a port via the $PORT environment variable.
+# We MUST configure Apache to listen to this dynamic port instead of the default port 80.
 RUN sed -i 's/Listen 80/Listen ${PORT}/g' /etc/apache2/ports.conf \
     && sed -i 's/<VirtualHost \*:80>/<VirtualHost \*:${PORT}>/g' /etc/apache2/sites-available/000-default.conf
 
-# Start Apache server in the foreground
+# Start the Apache server in the foreground
 CMD ["apache2-foreground"]
